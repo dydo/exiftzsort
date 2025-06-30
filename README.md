@@ -81,14 +81,14 @@ python exiftzsort.py ./media --output-dir ./sorted_output
 
 ```
 Pict_works/
-mq New/
-    tq 2023/
-    x   mq 2023_07/
-    x       tq 20230725-102015.jpg
-    x       tq 20230725-102016-01.jpg
-    x       mq raw/
-    x           tq 20230725-102017.dng
-    x           mq 20230725-102018-01.cr2
+└── New/
+    └── 2023/
+        └── 2023_07/
+            ├── 20230725-102015.jpg
+            ├── 20230725-102016-01.jpg
+            └── raw/
+                ├── 20230725-102017.dng
+                └── 20230725-102018-01.cr2
 ```
 
 ---
