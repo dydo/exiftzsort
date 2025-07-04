@@ -15,6 +15,14 @@
 
 ---
 
+## 🎯 Who is this for?
+
+If your photos and videos come from **different cameras, phones, or family members**, and the filenames are a complete mess — you're not alone.  
+`exiftzsort` helps you bring them all together, **sorted by the actual time they were taken**, not by filename or folder.  
+Whether it's vacation memories, kids growing up, or everyday snapshots, you can finally enjoy them **in the right order**.
+
+---
+
 ## 🛠 Options
 
 | Option            | Description                                                                         |
@@ -90,6 +98,12 @@ Pict_works/
                 ├── 20230725-102017.dng
                 └── 20230725-102018-01.cr2
 ```
+
+---
+
+## 📘 日本語版のREADME
+
+日本語での説明はこちら → [README_ja.md](./README_ja.md)
 
 ---
 
