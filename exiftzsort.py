@@ -66,25 +66,34 @@ parser = argparse.ArgumentParser(
     prog='exiftzsort',
     description='📸 exiftzsort: Organize photos/videos into date-based folders using EXIF or metadata timestamps.',
     epilog='Example: python exiftzsort.py ./input --copy --cmp-mode hash --exif-timezone {}'.format(get_last_used_tz()),
-    formatter_class=RawTextHelpFormatter
+    formatter_class=RawTextHelpFormatter,
 )
-parser.add_argument('source_dir', nargs='?', default='.',
-                    help='Input directory containing media files (default: current directory)')
+parser.add_argument(
+    'source_dir', nargs='?', default='.',
+    help='Input directory containing media files (default: current directory)',
+)
 parser.add_argument(
     "--output-dir", type=Path, default=Path.cwd(),
-    help="Base output directory for sorted files (default: current directory)")
-parser.add_argument('--log-level', choices=LOG_LEVELS.keys(), default=default_log_level,
-                    help=(
-                        "Set minimum log level to display.\n"
-                        "  - DEBUG: detailed information for debugging\n"
-                        "  - INFO: general progress messages\n"
-                        "  - WARN: warnings (default)\n"
-                        "  - ERROR: only error messages"
-                    ))
-parser.add_argument('--copy', action='store_true',
-                    help='Copy files instead of creating symbolic links (default: symlink)')
-parser.add_argument('--cmp-mode', choices=['filecmp', 'hash'], default='filecmp',
-                    help='Duplicate check method: "filecmp" (fast) or "hash" (accurate)')
+    help="Base output directory for sorted files (default: current directory)",
+)
+parser.add_argument(
+    '--log-level', choices=LOG_LEVELS.keys(), default=default_log_level,
+    help=(
+        "Set minimum log level to display.\n"
+        "  - DEBUG: detailed information for debugging\n"
+        "  - INFO: general progress messages\n"
+        "  - WARN: warnings (default)\n"
+        "  - ERROR: only error messages"
+    ),
+)
+parser.add_argument(
+    '--copy', action='store_true',
+    help='Copy files instead of creating symbolic links (default: symlink)',
+)
+parser.add_argument(
+    '--cmp-mode', choices=['filecmp', 'hash'], default='filecmp',
+    help='Duplicate check method: "filecmp" (fast) or "hash" (accurate)',
+)
 parser.add_argument(
     '--exif-timezone',
     default='local',
@@ -95,14 +104,18 @@ parser.add_argument(
         '  - "local": use your computer\'s local timezone (default)\n'
         '  - <IANA name>: explicitly specify timezone (e.g. "America/New_York","Asia/Tokyo")\n'
         f'Default: local ({get_last_used_tz()})'
-    )
+    ),
 )
-parser.add_argument("--enable-skip-dir",
-                    action="store_true",
-                    help="Enable skipping of specified directories")
-parser.add_argument("--skip-dirs", nargs='*',
-                    default=[],
-                    help="List of directory names to skip (used only if --enable-skip-dir is set)")
+parser.add_argument(
+    "--enable-skip-dir",
+    action="store_true",
+    help="Enable skipping of specified directories",
+)
+parser.add_argument(
+    "--skip-dirs", nargs='*',
+    default=[],
+    help="List of directory names to skip (used only if --enable-skip-dir is set)",
+)
 
 args = parser.parse_args()
 log_level_threshold = LOG_LEVELS[args.log_level]
@@ -223,26 +236,28 @@ def convert_location_to_exif_style(location_str):
         loc = location_str.strip('/')
 
         # Ignore leading '+', then split into latitude and longitude
-        if '-' in loc[1:]:
-            idx = loc[1:].find('-') + 1
-            lat_str = loc[:idx]
-            lon_str = loc[idx:]
+        if '-' not in loc[1:]:
+            return None
 
-            lat = float(lat_str)
-            lon = float(lon_str)
+        idx = loc[1:].find('-') + 1
+        lat_str = loc[:idx]
+        lon_str = loc[idx:]
 
-            lat_ref = 'N' if lat >= 0 else 'S'
-            lon_ref = 'E' if lon >= 0 else 'W'
+        lat = float(lat_str)
+        lon = float(lon_str)
 
-            lat_dms = decimal_to_dms(lat)
-            lon_dms = decimal_to_dms(lon)
+        lat_ref = 'N' if lat >= 0 else 'S'
+        lon_ref = 'E' if lon >= 0 else 'W'
 
-            return {
-                'GPSLatitudeRef': lat_ref,
-                'GPSLatitude': lat_dms,
-                'GPSLongitudeRef': lon_ref,
-                'GPSLongitude': lon_dms
-            }
+        lat_dms = decimal_to_dms(lat)
+        lon_dms = decimal_to_dms(lon)
+
+        return {
+            'GPSLatitudeRef': lat_ref,
+            'GPSLatitude': lat_dms,
+            'GPSLongitudeRef': lon_ref,
+            'GPSLongitude': lon_dms
+        }
 
     except Exception as e:
         print(f"[WARN] Location parse failed: {location_str}, error: {e}")
@@ -259,25 +274,27 @@ def get_datetime_from_ffprobe(file: Path) -> datetime | None:
         data = json.loads(result.stdout)
         tags = data.get('format', {}).get('tags', {})
         ct = tags.get('creation_time')
-        if ct:
-            dt_utc = datetime.strptime(ct, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=ZoneInfo('UTC'))
+        if not ct:
+            return None
 
-            # Convert location to EXIF format here and use it to determine timezone
-            location_str = tags.get('location') or tags.get('location-eng')
-            exif_gps = convert_location_to_exif_style(location_str)
-            if exif_gps:
-                lat = exif_gps['GPSLatitude'][0] + exif_gps['GPSLatitude'][1] / 60 + exif_gps['GPSLatitude'][2] / 3600
-                if exif_gps['GPSLatitudeRef'] == 'S':
-                    lat *= -1
-                lon = exif_gps['GPSLongitude'][0] + exif_gps['GPSLongitude'][1] / 60 + exif_gps['GPSLongitude'][2] / 3600
-                if exif_gps['GPSLongitudeRef'] == 'W':
-                    lon *= -1
+        dt_utc = datetime.strptime(ct, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=ZoneInfo('UTC'))
 
-                tz_name = TimezoneFinder().timezone_at(lat=lat, lng=lon)
-                if tz_name:
-                    return dt_utc.astimezone(ZoneInfo(tz_name))
+        # Convert location to EXIF format here and use it to determine timezone
+        location_str = tags.get('location') or tags.get('location-eng')
+        exif_gps = convert_location_to_exif_style(location_str)
+        if exif_gps:
+            lat = exif_gps['GPSLatitude'][0] + exif_gps['GPSLatitude'][1] / 60 + exif_gps['GPSLatitude'][2] / 3600
+            if exif_gps['GPSLatitudeRef'] == 'S':
+                lat *= -1
+            lon = exif_gps['GPSLongitude'][0] + exif_gps['GPSLongitude'][1] / 60 + exif_gps['GPSLongitude'][2] / 3600
+            if exif_gps['GPSLongitudeRef'] == 'W':
+                lon *= -1
 
-            return dt_utc.astimezone(ZoneInfo(tz_name if tz_name else 'UTC'))
+            tz_name = TimezoneFinder().timezone_at(lat=lat, lng=lon)
+            if tz_name:
+                return dt_utc.astimezone(ZoneInfo(tz_name))
+
+        return dt_utc.astimezone(ZoneInfo(tz_name if tz_name else 'UTC'))
     except Exception:
         pass
     return None
@@ -374,6 +391,7 @@ def process_file(file: Path):
 
 for path in source_dir.rglob('*'):
     if args.enable_skip_dir and any(skip.lower() in (part.lower() for part in path.parts) for skip in skip_dirs):
+        log(f"Skipped '{path}' because it matches a known directory (e.g. LINE or Facebook) where timestamps may be altered or missing.", level="WARN")
         continue
     if path.is_file():
         process_file(path)
