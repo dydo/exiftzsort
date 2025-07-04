@@ -29,9 +29,12 @@ Whether it's vacation memories, kids growing up, or everyday snapshots, you can 
 | ----------------- | ----------------------------------------------------------------------------------- |
 | `source_dir`      | Input directory (defaults to current directory)                                     |
 | `--output-dir`    | Base output directory (default: current working directory)                          |
-| `--copy`          | Copy files instead of creating symbolic links                                       |
+| `--copy`          | Copy files instead of creating symbolic links  (default: symlink)                   |
 | `--cmp-mode`      | Duplicate comparison method: `filecmp` (fast) or `hash` (accurate)                  |
-| `--exif-timezone` | Timezone for EXIF timestamps (`auto` to detect from GPS)                            |
+| `--exif-timezone` | Timezone for interpreting EXIF timestamps:                                          |
+|                   | - `"auto"`: determine timezone from GPS coordinates if available                    |
+|                   | - `"local"`: use your computer's local timezone (default)                           |
+|                   | - `<IANA name>`: specify explicitly (e.g. `"America/New_York"`, `"Asia/Tokyo"`)     |
 | `--log-level`     | Minimum log level to display: `DEBUG` / `INFO` / `WARN` / `ERROR` (default: `WARN`) |
 | `-h`, `--help`    | Show help                                                                           |
 

@@ -19,6 +19,7 @@
 from pathlib import Path
 from datetime import datetime
 import argparse
+from argparse import RawTextHelpFormatter
 import shutil
 import subprocess
 import json
@@ -30,18 +31,28 @@ from zoneinfo import ZoneInfo
 import os
 import time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+import tzlocal
+
+try:
+    last_used_tz = ZoneInfo(tzlocal.get_localzone_name()) if tzlocal else ZoneInfo("UTC")
+except Exception:
+    last_used_tz = ZoneInfo("UTC")
+
+def update_last_used_tz(tz: ZoneInfo):
+    global last_used_tz
+    last_used_tz = tz
+
+def get_last_used_tz():
+    return last_used_tz
 
 def validate_timezone(tz_str: str) -> str:
-    if tz_str.lower() == 'auto':
-        return tz_str
+    if tz_str.lower() in ['auto', 'local']:
+        return tz_str.lower()
     try:
         ZoneInfo(tz_str)
         return tz_str
     except ZoneInfoNotFoundError:
-        raise argparse.ArgumentTypeError(f"Invalid timezone: '{tz_str}'. Use IANA timezone names like 'Asia/Tokyo'.")
-
-# Debug default (not actually used)
-default_debug_dir = Path('D:/Data/Pict_works' if Path('D:/Data').exists() else '/g/Data/Pict_works')
+        raise argparse.ArgumentTypeError(f"Invalid timezone: '{tz_str}'. Use IANA timezone names like '{last_used_tz}'.")
 
 LOG_LEVELS = {
     "DEBUG": 10,
@@ -51,12 +62,11 @@ LOG_LEVELS = {
 }
 default_log_level = 'WARN'
 
-skip_dirs = ["SNOW", "thumbnails", "LINE", "LINE_MOVIE", "Facebook", "PhotoDirector", "Pictures"]
-
 parser = argparse.ArgumentParser(
     prog='exiftzsort',
     description='📸 exiftzsort: Organize photos/videos into date-based folders using EXIF or metadata timestamps.',
-    epilog='Example: python exiftzsort.py ./input --copy --cmp-mode hash --exif-timezone Asia/Tokyo'
+    epilog='Example: python exiftzsort.py ./input --copy --cmp-mode hash --exif-timezone {}'.format(get_last_used_tz()),
+    formatter_class=RawTextHelpFormatter
 )
 parser.add_argument('source_dir', nargs='?', default='.',
                     help='Input directory containing media files (default: current directory)')
@@ -64,15 +74,29 @@ parser.add_argument(
     "--output-dir", type=Path, default=Path.cwd(),
     help="Base output directory for sorted files (default: current directory)")
 parser.add_argument('--log-level', choices=LOG_LEVELS.keys(), default=default_log_level,
-                    help=f'Set minimum log level to display (default: {default_log_level})')
+                    help=(
+                        "Set minimum log level to display.\n"
+                        "  - DEBUG: detailed information for debugging\n"
+                        "  - INFO: general progress messages\n"
+                        "  - WARN: warnings (default)\n"
+                        "  - ERROR: only error messages"
+                    ))
 parser.add_argument('--copy', action='store_true',
-                    help='Copy files instead of creating symbolic links')
+                    help='Copy files instead of creating symbolic links (default: symlink)')
 parser.add_argument('--cmp-mode', choices=['filecmp', 'hash'], default='filecmp',
                     help='Duplicate check method: "filecmp" (fast) or "hash" (accurate)')
-parser.add_argument('--exif-timezone',
-                    default='auto',
-                    type=validate_timezone,
-                    help='Timezone for interpreting EXIF timestamps: "auto" for GPS-based or IANA name (e.g. Asia/Tokyo)')
+parser.add_argument(
+    '--exif-timezone',
+    default='local',
+    type=validate_timezone,
+    help=(
+        "Timezone for interpreting EXIF timestamps.\n"
+        '  - "auto": determine timezone from GPS coordinates if available\n'
+        '  - "local": use your computer\'s local timezone (default)\n'
+        '  - <IANA name>: explicitly specify timezone (e.g. "America/New_York","Asia/Tokyo")\n'
+        f'Default: local ({get_last_used_tz()})'
+    )
+)
 parser.add_argument("--enable-skip-dir",
                     action="store_true",
                     help="Enable skipping of specified directories")
@@ -85,7 +109,10 @@ log_level_threshold = LOG_LEVELS[args.log_level]
 source_dir = Path(args.source_dir).resolve()
 do_copy = args.copy
 cmp_mode = args.cmp_mode
-exif_tz_option = args.exif_timezone
+exif_tz_option_raw = args.exif_timezone
+exif_tz_option = exif_tz_option_raw
+if exif_tz_option_raw == 'local':
+    exif_tz_option = get_last_used_tz()
 skip_dirs = args.skip_dirs if args.enable_skip_dir else []
 
 imgdirbase = args.output_dir.resolve()
@@ -112,16 +139,6 @@ def log(message: str, level: str = "INFO"):
     }.get(level, f"[{level}]")
 
     print(f"{prefix} {message}")
-
-
-last_used_tz = ZoneInfo('Asia/Tokyo')
-
-def update_last_used_tz(tz: ZoneInfo):
-    global last_used_tz
-    last_used_tz = tz
-
-def get_last_used_tz():
-    return last_used_tz
 
 def dms_to_deg_flexible(dms: tuple, ref: str) -> float:
     def to_float(x):
